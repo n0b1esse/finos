@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     # machine-readable map of every endpoint and payload shape.
     enable_docs: bool = True
 
+    # HTTP Basic Auth protecting the API itself (see core/basic_auth.py).
+    # Same pair the Docker setup feeds to nginx instead
+    # (frontend/docker-entrypoint.d/20-basic-auth.sh) — set both to require
+    # them on every /api/* route except /api/health. Both blank (the
+    # default) means no password at all: only safe when something else —
+    # nginx basic auth, a private network, localhost — already gates access.
+    basic_auth_user: str = ""
+    basic_auth_password: str = ""
+
     @property
     def database_url(self) -> str:
         return (

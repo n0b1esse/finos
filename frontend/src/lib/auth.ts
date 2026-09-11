@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 import { forgetCredential, isVaultAvailable, recallCredential, rememberCredential } from "@/lib/credentialVault";
+import { apiUrl } from "@/api/base";
 
 /**
  * Client-side mirror of the HTTP Basic Auth credentials the FinOS login
@@ -161,7 +162,7 @@ const PROBE_HEADER = `Basic ${btoa("__finos_probe__:__finos_probe__")}`;
  * (see LoginScreen.tsx). */
 export async function checkCredentials(header: string | null): Promise<CredentialCheck> {
   try {
-    const response = await fetch("/api/accounts", {
+    const response = await fetch(apiUrl("/accounts"), {
       headers: { Authorization: header ?? PROBE_HEADER },
     });
     return response.status === 401 ? "unauthorized" : "ok";

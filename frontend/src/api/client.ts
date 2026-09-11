@@ -1,6 +1,9 @@
+import { apiBase } from "@/api/base";
 import { clearCredentials, getAuthHeader } from "@/lib/auth";
 
-const API_BASE = "/api";
+const API_BASE = apiBase();
+
+export { apiUrl } from "@/api/base";
 
 export class ApiError extends Error {
   status: number;

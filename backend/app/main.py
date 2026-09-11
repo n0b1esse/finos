@@ -22,6 +22,7 @@ from app.api.routes import (
     tags,
     transactions,
 )
+from app.core.basic_auth import basic_auth_middleware
 from app.core.config import APP_VERSION, get_settings
 from app.db.seed import seed_default_account, seed_default_app_settings, seed_default_categories
 from app.db.session import AsyncSessionLocal
@@ -68,6 +69,17 @@ if cors_origins:
         allow_credentials="*" not in cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+
+# Password gate for the API itself. Docker doesn't need it (nginx enforces
+# the same pair in front — see frontend/docker-entrypoint.d/20-basic-auth.sh),
+# while a standalone backend does: without this, exposing it past localhost
+# leaves every route open. Runs outside CORSMiddleware (last added runs
+# first), so it explicitly lets OPTIONS and /api/health through — preflights
+# are then answered by CORSMiddleware inside (see core/basic_auth.py).
+if settings.basic_auth_user and settings.basic_auth_password:
+    app.middleware("http")(
+        basic_auth_middleware(settings.basic_auth_user, settings.basic_auth_password)
     )
 
 app.include_router(dashboard.router, prefix="/api")

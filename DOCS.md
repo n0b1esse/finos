@@ -50,13 +50,15 @@ this base URL — e.g. `GET /transactions` means `GET http://localhost:3000/api/
 ### Auth
 
 FinOS has no built-in login system or API keys — it's designed for one person to self-host one
-private instance. Access control is whatever you put in front of it:
+private instance. Access control is HTTP Basic Auth, enforced by the backend itself
+(and additionally by nginx in the Docker setup):
 
-- **Nothing set:** if `FINOS_BASIC_AUTH_USER` / `FINOS_BASIC_AUTH_PASSWORD` are empty in `.env`
+- **Nothing set:** if `FINOS_BASIC_AUTH_USER` / `FINOS_BASIC_AUTH_PASSWORD` are empty
   (the default), the API is completely open to anyone who can reach the host — no credentials
   needed. Fine for `localhost`-only or a private network; **not** fine on the public internet.
-- **HTTP Basic Auth:** set both `FINOS_BASIC_AUTH_USER` and `FINOS_BASIC_AUTH_PASSWORD` in `.env`
-  and restart (`docker compose up -d`). Every request — UI and API alike — then requires an
+- **HTTP Basic Auth:** set both `FINOS_BASIC_AUTH_USER` and `FINOS_BASIC_AUTH_PASSWORD`
+  and restart (`docker compose up -d`, or redeploy the hosted backend). Every request —
+  UI and API alike — then requires an
   `Authorization: Basic <base64(user:password)>` header, or the equivalent `-u user:password` flag
   in curl.
 
