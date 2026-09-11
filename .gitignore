@@ -53,3 +53,6 @@ pgdata/
 # Other
 UPDATES.md
 temp/
+
+# Local agent tooling (skills lockfile, created by the coding environment)
+skills-lock.json
