@@ -1,0 +1,78 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${FINOS_POSTGRES_USER:-finos}
+      # "change-me" so this matches .env.example exactly: with no .env at all
+      # the fallback here used to be "finos" while the template said
+      # "change-me", i.e. "the default password" meant two different things
+      # depending on whether the file existed. Postgres isn't published to the
+      # host (no ports: below), so reaching it means already being on the
+      # container network — but see .env.example for the trap that makes this
+      # worth getting right the first time.
+      POSTGRES_PASSWORD: ${FINOS_POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${FINOS_POSTGRES_DB:-finos}
+    volumes:
+      - finos_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FINOS_POSTGRES_USER:-finos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    # Nothing here ever needs to gain privileges (no setuid binaries, no sudo),
+    # so forbid it outright — this is what stops a compromised process from
+    # escalating back to root inside the container.
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      FINOS_POSTGRES_USER: ${FINOS_POSTGRES_USER:-finos}
+      # Must stay identical to the db service's fallback above — if the two
+      # drift, an install without .env brings up a database with one password
+      # and a backend dialling it with another.
+      FINOS_POSTGRES_PASSWORD: ${FINOS_POSTGRES_PASSWORD:-change-me}
+      FINOS_POSTGRES_DB: ${FINOS_POSTGRES_DB:-finos}
+      FINOS_POSTGRES_HOST: db
+      FINOS_POSTGRES_PORT: 5432
+      FINOS_CORS_ORIGINS: ${FINOS_CORS_ORIGINS:-}
+      FINOS_DEFAULT_CURRENCY: ${FINOS_DEFAULT_CURRENCY:-USD}
+      # Free CoinGecko Demo key (coingecko.com/en/api/pricing) — the Crypto
+      # tab's price sync 400s with a clear message until this is set.
+      FINOS_COINGECKO_API_KEY: ${FINOS_COINGECKO_API_KEY:-}
+      FINOS_ENABLE_DOCS: ${FINOS_ENABLE_DOCS:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    # nginx's master still needs root to bind :80 and to write the htpasswd
+    # file at boot (docker-entrypoint.d/20-basic-auth.sh), so this one can't
+    # drop to a non-root user without reworking both — but it can still be
+    # barred from escalating any further.
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      # Bound to loopback by default: published as "3000:80" the app answers
+      # on every interface, so anyone on the same Wi-Fi reaches it — and by
+      # default there is no password on it at all (see 20-basic-auth.sh).
+      # Set FINOS_BIND_ADDRESS=0.0.0.0 to reach it from other devices, but
+      # set FINOS_BASIC_AUTH_USER/PASSWORD before you do.
+      - "${FINOS_BIND_ADDRESS:-127.0.0.1}:${FINOS_WEB_PORT:-3000}:80"
+    environment:
+      # Both unset = no login screen at all. See frontend/docker-entrypoint.d/20-basic-auth.sh.
+      FINOS_BASIC_AUTH_USER: ${FINOS_BASIC_AUTH_USER:-}
+      FINOS_BASIC_AUTH_PASSWORD: ${FINOS_BASIC_AUTH_PASSWORD:-}
+      # Hostnames this instance answers to — anything else gets a 421.
+      # See frontend/docker-entrypoint.d/25-allowed-hosts.sh.
+      FINOS_ALLOWED_HOSTS: ${FINOS_ALLOWED_HOSTS:-localhost 127.0.0.1}
+    depends_on:
+      - backend
+
+volumes:
+  finos_pgdata:
