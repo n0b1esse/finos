@@ -25,10 +25,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account
 from app.models.asset import Asset, AssetValuation
+from app.models.credit import Credit, CreditPayment
 from app.models.enums import AccountType, AssetClass, CapitalRole, RiskLevel, TransactionType
 from app.models.transaction import Transaction
 from app.schemas.net_worth import (
     CapitalRoleSummary,
+    LiabilityItem,
     NetWorthBreakdownItem,
     NetWorthPoint,
     NetWorthSummary,
@@ -234,26 +236,111 @@ async def _risk_level_summary(
     return summaries
 
 
-def _resolve_start_date(range_key: str, cash_events: list[tuple[date_, Decimal]], asset_events: list[tuple[date_, Decimal]], today: date_) -> date_:
+def _resolve_start_date(
+    range_key: str,
+    cash_events: list[tuple[date_, Decimal]],
+    asset_events: list[tuple[date_, Decimal]],
+    liability_events: list[tuple[date_, Decimal]],
+    today: date_,
+) -> date_:
     if range_key in RANGE_DAYS:
         return today - timedelta(days=RANGE_DAYS[range_key] - 1)
 
-    all_dates = [e[0] for e in cash_events] + [e[0] for e in asset_events]
+    all_dates = [e[0] for e in cash_events] + [e[0] for e in asset_events] + [e[0] for e in liability_events]
     return min(all_dates) if all_dates else today
+
+
+async def _liability_events_and_outstanding(
+    session: AsyncSession, today: date_
+) -> tuple[list[tuple[date_, Decimal]], Decimal, list[LiabilityItem]]:
+    """Outstanding debt per day plus today's remainder, from the Credit /
+    CreditPayment log. Mirrors _asset_events_and_class_totals, inverted: a
+    credit's full total appears on its start date (first payment date, or
+    today when neither is known yet) and each payment day shrinks it, floored
+    at zero — same floor services/credit_service.py applies on read, so the
+    two can never disagree."""
+    credits_result = await session.execute(
+        select(Credit.id, Credit.name, Credit.total_amount, Credit.monthly_payment, Credit.start_date)
+    )
+    credits = credits_result.all()
+
+    payments_result = await session.execute(
+        select(CreditPayment.credit_id, CreditPayment.date, CreditPayment.amount).order_by(CreditPayment.date)
+    )
+    paid_by_credit_day: dict[int, dict[date_, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
+    for credit_id, pay_date, amount in payments_result.all():
+        paid_by_credit_day[credit_id][pay_date] += amount
+
+    all_days = sorted(
+        {day for days in paid_by_credit_day.values() for day in days}
+        | {start for _, _, _, _, start in credits if start is not None}
+    )
+
+    remaining_by_credit: dict[int, Decimal] = {}
+    activated: set[int] = set()
+    events: list[tuple[date_, Decimal]] = []
+    for day in all_days:
+        changed = False
+        for credit_id, _, total, _, start in credits:
+            if credit_id not in activated and (start is None or start <= day):
+                # No start date and no payments yet: the debt still exists
+                # right now, it just has no history to anchor to.
+                if start is not None or day in paid_by_credit_day.get(credit_id, {}):
+                    remaining_by_credit[credit_id] = total
+                    activated.add(credit_id)
+                    changed = True
+        for credit_id, days in paid_by_credit_day.items():
+            if day in days:
+                if credit_id not in activated:
+                    total = next(total for cid, _, total, _, _ in credits if cid == credit_id)
+                    remaining_by_credit[credit_id] = total
+                    activated.add(credit_id)
+                remaining_by_credit[credit_id] = max(
+                    remaining_by_credit[credit_id] - days[day], Decimal("0")
+                )
+                changed = True
+        if changed:
+            events.append((day, sum(remaining_by_credit.values(), Decimal("0"))))
+
+    # Credits with no start date and no payments at all: owed in full today,
+    # with no past to backfill — same "latest value counts" rule valuations use.
+    for credit_id, name, total, monthly_payment, start in credits:
+        if credit_id not in activated:
+            remaining_by_credit[credit_id] = total
+            activated.add(credit_id)
+    outstanding = sum(remaining_by_credit.values(), Decimal("0"))
+    items = [
+        LiabilityItem(
+            credit_id=credit_id,
+            name=name,
+            remaining=remaining_by_credit[credit_id],
+            monthly_payment=monthly_payment,
+        )
+        for credit_id, name, _, monthly_payment, _ in credits
+        if remaining_by_credit.get(credit_id, Decimal("0")) > 0
+    ]
+    items.sort(key=lambda item: item.remaining, reverse=True)
+    return events, outstanding, items
 
 
 async def get_net_worth_summary(session: AsyncSession, range_key: str) -> NetWorthSummary:
     today = date_.today()
     cash_events = await _cash_cumulative_events(session)
     asset_events, class_totals, current_by_asset = await _asset_events_and_class_totals(session)
+    liability_events, total_liabilities, liabilities = await _liability_events_and_outstanding(session, today)
     capital_roles = await _capital_role_summary(session, current_by_asset)
 
-    start = _resolve_start_date(range_key, cash_events, asset_events, today)
+    start = _resolve_start_date(range_key, cash_events, asset_events, liability_events, today)
 
     cash_series = _daily_series(cash_events, start, today)
     asset_series = _daily_series(asset_events, start, today)
+    liability_series = _daily_series(liability_events, start, today)
+    # Net of debts: what you own minus what you owe is the only number that
+    # answers "what am I actually worth". The breakdown below stays gross
+    # (assets and cash) — total_liabilities explains the delta.
     series = [
-        NetWorthPoint(date=c.date, value=c.value + a.value) for c, a in zip(cash_series, asset_series, strict=True)
+        NetWorthPoint(date=c.date, value=c.value + a.value - liab.value)
+        for c, a, liab in zip(cash_series, asset_series, liability_series, strict=True)
     ]
 
     current = series[-1].value if series else Decimal("0")
@@ -289,4 +376,6 @@ async def get_net_worth_summary(session: AsyncSession, range_key: str) -> NetWor
         breakdown=breakdown,
         capital_roles=capital_roles,
         risk_levels=risk_levels,
+        total_liabilities=total_liabilities,
+        liabilities=liabilities,
     )

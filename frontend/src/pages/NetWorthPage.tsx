@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { NetWorthChart } from "@/components/networth/NetWorthChart";
 import { AssetAllocationCard } from "@/components/networth/AssetAllocationCard";
 import { CapitalRoleSummaryCard } from "@/components/networth/CapitalRoleSummaryCard";
+import { LiabilitiesCard } from "@/components/networth/LiabilitiesCard";
 import { RiskAllocationCard } from "@/components/networth/RiskAllocationCard";
 import { AssetsTable } from "@/components/networth/AssetsTable";
 import { AssetFormModal } from "@/components/networth/AssetFormModal";
@@ -54,6 +55,12 @@ export function NetWorthPage() {
       <CapitalRoleSummaryCard roles={summary?.capital_roles ?? []} isLoading={isSummaryLoading} />
 
       <RiskAllocationCard riskLevels={summary?.risk_levels ?? []} isLoading={isSummaryLoading} />
+
+      <LiabilitiesCard
+        total={summary?.total_liabilities ?? "0"}
+        items={summary?.liabilities ?? []}
+        isLoading={isSummaryLoading}
+      />
 
       <Card>
         <CardHeader>

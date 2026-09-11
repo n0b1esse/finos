@@ -26,6 +26,7 @@ like Postman/Insomnia.
 - [Recurring Transactions](#recurring-transactions)
 - [Budgets](#budgets)
 - [Goals](#goals)
+- [Credits](#credits)
 - [Assets & Net Worth](#assets--net-worth)
 - [Crypto](#crypto)
 - [Dashboard, Cash Flow & Reports](#dashboard-cash-flow--reports)
@@ -488,6 +489,48 @@ negative (a withdrawal against the goal) but not zero.
 }
 ```
 
+## Credits
+
+Loans with a running payment log — the mirror image of [Goals](#goals): `remaining` is `total_amount`
+minus every logged payment (floored at zero), never stored separately. Outstanding debts are also
+subtracted from the [net worth](#assets--net-worth) timeline and total, so `current` there stays
+honestly net.
+
+**`CreditType`:** `consumer` · `mortgage` · `auto` · `credit_card` · `other` (display grouping only).
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/credits` | List all credits with computed payoff progress. |
+| `POST` | `/credits` | Create a credit. |
+| `PATCH` | `/credits/{id}` | Update a credit (partial). |
+| `DELETE` | `/credits/{id}` | Delete a credit and its payment log. |
+| `POST` | `/credits/{id}/payments` | Log a repayment. |
+
+**Create body:** `{"name": "Car loan", "credit_type": "auto", "total_amount": 10000, "annual_rate": 12.5, "monthly_payment": 500, "start_date": "2026-01-01"}`
+(`credit_type` defaults to `other`, `start_date`/`end_date` optional).
+
+**Add payment:** `{"amount": 500, "date": "2026-08-29", "note": "extra"}`. `amount` must be
+positive — unlike goal contributions, there is no "negative payment".
+
+**Response** (`CreditRead`):
+
+```json
+{
+  "id": 1,
+  "name": "Car loan",
+  "credit_type": "auto",
+  "total_amount": "10000.00",
+  "annual_rate": "12.50",
+  "monthly_payment": "500.00",
+  "start_date": "2026-01-01",
+  "end_date": null,
+  "paid_total": "2000.00",
+  "remaining": "8000.00",
+  "percent": 20.0,
+  "is_paid": false
+}
+```
+
 ## Assets & Net Worth
 
 Assets are manually tracked, non-cash net-worth components — investments, crypto, real estate,
@@ -554,9 +597,18 @@ personal vehicle)
       "total_value": "5250.00", "percent": 10.88,
       "items": [ { "key": "cash", "name": "Cash", "amount": "5250.00", "percent": 100.0 } ]
     }
+  ],
+  "total_liabilities": "8000.00",
+  "liabilities": [
+    { "credit_id": 1, "name": "Car loan", "remaining": "8000.00", "monthly_payment": "500.00" }
   ]
 }
 ```
+
+`current`, `change_amount`/`change_percent` and `series` are all **net of debts** (cash + assets −
+outstanding [credits](#credits), tracked day by day from the payment log). `breakdown`,
+`capital_roles` and `risk_levels` stay gross (assets and cash only) — `total_liabilities` explains
+the delta, and `liabilities` lists every not-yet-repaid credit.
 
 ## Crypto
 

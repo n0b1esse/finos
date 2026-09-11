@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   Calculator,
   Coins,
+  CreditCard,
   Flag,
   Layers,
   Lightbulb,
@@ -38,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.budget", to: "/budget", icon: Target },
   { labelKey: "nav.recurring", to: "/recurring", icon: Repeat },
   { labelKey: "nav.goals", to: "/goals", icon: Flag },
+  { labelKey: "nav.credits", to: "/credits", icon: CreditCard },
   { labelKey: "nav.advice", to: "/advice", icon: Lightbulb },
   { labelKey: "nav.settings", to: "/settings", icon: Settings },
 ];

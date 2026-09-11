@@ -57,6 +57,18 @@ class CryptoTransactionType(str, enum.Enum):
     SELL = "sell"
 
 
+class CreditType(str, enum.Enum):
+    """What kind of debt a Credit is — display grouping only, no behavior
+    differences: a mortgage and a credit card are both paid down by logging
+    CreditPayment rows against the outstanding total."""
+
+    CONSUMER = "consumer"
+    MORTGAGE = "mortgage"
+    AUTO = "auto"
+    CREDIT_CARD = "credit_card"
+    OTHER = "other"
+
+
 class RiskLevel(str, enum.Enum):
     """Risk of loss, not asset class — set by the user, not inferred: real
     estate can be a paid-off primary home (LOW) or a leveraged rental

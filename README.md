@@ -66,8 +66,8 @@ A live net worth timeline (30 days to all-time) aggregating cash and every manua
 ### 🪙 Crypto Tracker
 A CoinMarketCap-style portfolio tab for the coins you actually hold: live price plus 1h/24h/7d change, your holdings value, average buy price, and profit/loss — computed from a full buy/sell history, no separate portfolio tracker needed. Refresh on demand with one button, or let it auto-refresh once a day; either way it plugs straight into the Net Worth engine above as just another tracked asset.
 
-### 🎯 Budgets, Goals & Recurring Payments
-Set a monthly limit per category and watch progress bars fill up. Track savings goals with a running contribution log. Register recurring bills and post them with one click when they're due — nothing runs automatically in the background.
+### 🎯 Budgets, Goals, Credits & Recurring Payments
+Set a monthly limit per category and watch progress bars fill up. Track savings goals with a running contribution log. Track loans with a payment log — outstanding debts are subtracted from your net worth automatically. Register recurring bills and post them with one click when they're due — nothing runs automatically in the background.
 
 ### 📊 Reports & Advice
 Rank every category by total spend over any custom period to find what's actually eating your budget. A rules-based Advice tab surfaces rising spending categories, unbudgeted top expenses, and month-over-month savings rate trends in plain language.
@@ -82,7 +82,7 @@ FinOS watches your numbers in the background and surfaces a warning the moment s
 Full Russian/English UI with a language switch in Settings, a light/dark/system theme toggle, and every screen designed mobile-first from day one.
 
 ### 💾 Full Backup & Restore
-Export your entire dataset — accounts, transactions, assets, budgets, goals — to a single JSON file at any time, and restore it later on a fresh install.
+Export your entire dataset — accounts, transactions, assets, budgets, goals, credits — to a single JSON file at any time, and restore it later on a fresh install.
 
 ## 🚀 Getting Started
 

@@ -22,6 +22,7 @@ from app.models.account import Account
 from app.models.asset import Asset, AssetValuation
 from app.models.budget import Budget
 from app.models.category import Category
+from app.models.credit import Credit, CreditPayment
 from app.models.crypto import CryptoHolding, CryptoPortfolio, CryptoTransaction
 from app.models.goal import Goal, GoalContribution
 from app.models.recurring import RecurringTransaction
@@ -36,6 +37,8 @@ from app.schemas.backup import (
     BackupPayload,
     BudgetBackup,
     CategoryBackup,
+    CreditBackup,
+    CreditPaymentBackup,
     CryptoHoldingBackup,
     CryptoPortfolioBackup,
     CryptoTransactionBackup,
@@ -67,6 +70,8 @@ async def build_backup(session: AsyncSession) -> BackupPayload:
     goals = (await session.execute(select(Goal))).scalars().all()
     goal_contributions = (await session.execute(select(GoalContribution))).scalars().all()
     recurring_transactions = (await session.execute(select(RecurringTransaction))).scalars().all()
+    credits = (await session.execute(select(Credit))).scalars().all()
+    credit_payments = (await session.execute(select(CreditPayment))).scalars().all()
     app_settings = await session.get(AppSettings, 1)
 
     return BackupPayload(
@@ -92,6 +97,8 @@ async def build_backup(session: AsyncSession) -> BackupPayload:
         goals=[GoalBackup.model_validate(row) for row in goals],
         goal_contributions=[GoalContributionBackup.model_validate(row) for row in goal_contributions],
         recurring_transactions=[RecurringTransactionBackup.model_validate(row) for row in recurring_transactions],
+        credits=[CreditBackup.model_validate(row) for row in credits],
+        credit_payments=[CreditPaymentBackup.model_validate(row) for row in credit_payments],
         app_settings=AppSettingsBackup.model_validate(app_settings) if app_settings else AppSettingsBackup(currency="USD"),
     )
 
@@ -167,6 +174,11 @@ def _validate_references(payload: BackupPayload) -> None:
         if r.category_id is not None and r.category_id not in category_ids:
             raise HTTPException(400, f"Recurring transaction {r.id} references unknown category_id {r.category_id}")
 
+    credit_ids = {row.id for row in payload.credits}
+    for p in payload.credit_payments:
+        if p.credit_id not in credit_ids:
+            raise HTTPException(400, f"Credit payment {p.id} references unknown credit_id {p.credit_id}")
+
 
 async def _reset_sequence(session: AsyncSession, table: str, rows: list) -> None:
     """Bulk-inserting rows with explicit ids doesn't advance the table's
@@ -201,6 +213,7 @@ async def restore_backup(session: AsyncSession, payload: BackupPayload) -> None:
         await session.execute(delete(GoalContribution))
         await session.execute(delete(Goal))
         await session.execute(delete(RecurringTransaction))
+        await session.execute(delete(CreditPayment))
         # Deleting transactions cascades transaction_tags and
         # transaction_splits rows (ON DELETE CASCADE) — deleted explicitly
         # here anyway to keep this block's ordering self-documenting.
@@ -210,6 +223,7 @@ async def restore_backup(session: AsyncSession, payload: BackupPayload) -> None:
         await session.execute(delete(Asset))
         await session.execute(delete(Category))
         await session.execute(delete(Account))
+        await session.execute(delete(Credit))
 
         # Parents before children. Categories are additionally self-referential
         # (parent_id points at another row in the same table) — sort
@@ -267,6 +281,8 @@ async def restore_backup(session: AsyncSession, payload: BackupPayload) -> None:
         session.add_all(Goal(**row.model_dump()) for row in payload.goals)
         session.add_all(GoalContribution(**row.model_dump()) for row in payload.goal_contributions)
         session.add_all(RecurringTransaction(**row.model_dump()) for row in payload.recurring_transactions)
+        session.add_all(Credit(**row.model_dump()) for row in payload.credits)
+        session.add_all(CreditPayment(**row.model_dump()) for row in payload.credit_payments)
         await session.flush()
 
         for row in payload.transactions:
@@ -291,6 +307,8 @@ async def restore_backup(session: AsyncSession, payload: BackupPayload) -> None:
         await _reset_sequence(session, "goals", payload.goals)
         await _reset_sequence(session, "goal_contributions", payload.goal_contributions)
         await _reset_sequence(session, "recurring_transactions", payload.recurring_transactions)
+        await _reset_sequence(session, "credits", payload.credits)
+        await _reset_sequence(session, "credit_payments", payload.credit_payments)
 
         # Singleton row — updated in place, not deleted/recreated (no
         # sequence to reset, id is always 1).

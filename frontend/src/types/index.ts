@@ -285,6 +285,15 @@ export interface NetWorthSummary {
   breakdown: NetWorthBreakdownItem[];
   capital_roles: CapitalRoleSummary[];
   risk_levels: RiskLevelSummary[];
+  total_liabilities: string;
+  liabilities: LiabilityItem[];
+}
+
+export interface LiabilityItem {
+  credit_id: number;
+  name: string;
+  remaining: string;
+  monthly_payment: string;
 }
 
 export interface CategorySpendingPoint {
@@ -367,6 +376,39 @@ export interface GoalInput {
 }
 
 export interface GoalContributionInput {
+  amount: string;
+  date: string;
+  note?: string | null;
+}
+
+export type CreditType = "consumer" | "mortgage" | "auto" | "credit_card" | "other";
+
+export interface Credit {
+  id: number;
+  name: string;
+  credit_type: CreditType;
+  total_amount: string;
+  annual_rate: string;
+  monthly_payment: string;
+  start_date: string | null;
+  end_date: string | null;
+  paid_total: string;
+  remaining: string;
+  percent: number;
+  is_paid: boolean;
+}
+
+export interface CreditInput {
+  name: string;
+  credit_type: CreditType;
+  total_amount: string;
+  annual_rate: string;
+  monthly_payment: string;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface CreditPaymentInput {
   amount: string;
   date: string;
   note?: string | null;

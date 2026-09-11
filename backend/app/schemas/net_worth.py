@@ -55,6 +55,16 @@ class RiskLevelSummary(BaseModel):
     items: list[RiskLevelItem]
 
 
+class LiabilityItem(BaseModel):
+    """One outstanding debt in today's money — a credit with remaining > 0.
+    Paid-off credits drop out of this list (their history stays in `series`)."""
+
+    credit_id: int
+    name: str
+    remaining: Decimal
+    monthly_payment: Decimal
+
+
 class NetWorthSummary(BaseModel):
     range: str
     current: Decimal
@@ -64,3 +74,8 @@ class NetWorthSummary(BaseModel):
     breakdown: list[NetWorthBreakdownItem]
     capital_roles: list[CapitalRoleSummary]
     risk_levels: list[RiskLevelSummary]
+    # Debts are not a breakdown slice (percents there are shares of gross
+    # assets) — they ride separately so `current` stays honestly net while
+    # the UI can still show exactly how much of it is owed.
+    total_liabilities: Decimal
+    liabilities: list[LiabilityItem]

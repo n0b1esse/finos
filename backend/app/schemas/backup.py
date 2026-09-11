@@ -11,6 +11,7 @@ from app.models.enums import (
     AssetClass,
     CapitalRole,
     CategoryKind,
+    CreditType,
     CryptoTransactionType,
     RecurringFrequency,
     RiskLevel,
@@ -200,6 +201,29 @@ class RecurringTransactionBackup(BaseModel):
     is_active: bool
 
 
+class CreditBackup(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    credit_type: CreditType
+    total_amount: Decimal
+    annual_rate: Decimal
+    monthly_payment: Decimal
+    start_date: date_ | None
+    end_date: date_ | None
+
+
+class CreditPaymentBackup(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    credit_id: int
+    amount: Decimal
+    date: date_
+    note: str | None
+
+
 class AppSettingsBackup(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -263,6 +287,10 @@ class BackupPayload(BaseModel):
     # Defaulted so a backup exported before recurring transactions existed
     # still imports cleanly under the same format version.
     recurring_transactions: list[RecurringTransactionBackup] = Field(default_factory=list)
+    # Defaulted so a backup exported before credits existed still imports
+    # cleanly under the same format version.
+    credits: list[CreditBackup] = Field(default_factory=list)
+    credit_payments: list[CreditPaymentBackup] = Field(default_factory=list)
     # Defaulted so a backup exported before the currency setting existed
     # still imports cleanly under the same format version.
     app_settings: AppSettingsBackup = Field(default_factory=lambda: AppSettingsBackup(currency="USD"))
