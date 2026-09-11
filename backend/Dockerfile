@@ -30,6 +30,10 @@ USER finos
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=5 \
-    CMD curl -f http://localhost:8000/api/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/api/health || exit 1
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# ${PORT:-8000}: PaaS hosts (Render/Railway/Fly) hand the container its port
+# via $PORT — locally that variable is unset and it falls back to 8000, so
+# no Docker Command override is needed anywhere. The sh -c wrapper is what
+# expands the variable; the JSON exec form alone would pass it literally.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
