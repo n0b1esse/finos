@@ -79,7 +79,11 @@ if cors_origins:
 # are then answered by CORSMiddleware inside (see core/basic_auth.py).
 if settings.basic_auth_user and settings.basic_auth_password:
     app.middleware("http")(
-        basic_auth_middleware(settings.basic_auth_user, settings.basic_auth_password)
+        basic_auth_middleware(
+            settings.basic_auth_user,
+            settings.basic_auth_password,
+            cors_origins,
+        )
     )
 
 app.include_router(dashboard.router, prefix="/api")
