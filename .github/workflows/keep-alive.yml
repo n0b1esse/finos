@@ -1,0 +1,65 @@
+name: Keep alive
+
+# Render's free tier spins a web service down after 15 minutes without
+# inbound traffic, and the next request then waits ~1 minute (cold start) —
+# which the frontend experiences as "the API is down". This workflow pings
+# the always-open GET /api/health (DOCS.md: no Basic Auth, built for exactly
+# this) every 12 minutes, so the service never goes 15 minutes idle and the
+# cold start never happens.
+#
+# Budget note: staying awake 24/7 costs ~730 hours of the 750 free instance
+# hours a month — fine for exactly one free service, no headroom for more.
+#
+# One-time setup: Settings → Secrets and variables → Actions → New repository
+# secret, name FINOS_BACKEND_URL, value e.g. https://finos-api.onrender.com
+# (scheme + host only: no trailing slash, no /api — it's appended below).
+# Keeping the URL in a secret keeps the personal instance out of the repo.
+on:
+  # "*/12" fires at :00 :12 :24 :36 :48 — comfortably inside Render's 15-minute
+  # idle window even if GitHub delays a run by a few minutes.
+  schedule:
+    - cron: "*/12 * * * *"
+  # Manual "Run workflow" button, handy to wake the backend right now.
+  workflow_dispatch:
+
+# Least privilege for GITHUB_TOKEN, same as ci.yml: the job only ever curls.
+permissions:
+  contents: read
+
+# Scheduled workflows are skipped when 50+ workflows are queued, and GitHub
+# auto-disables schedules after 60 days of no repo activity — if the API
+# starts sleeping again after a quiet couple of months, re-enable this
+# workflow on the Actions tab once.
+concurrency:
+  # A delayed run overlapping the next one adds nothing — the newest ping is
+  # what keeps the service awake, so drop the stale one.
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /api/health
+        env:
+          BACKEND_URL: ${{ secrets.FINOS_BACKEND_URL }}
+        run: |
+          # ${VAR%/} strips an accidental trailing slash from the secret.
+          url="${BACKEND_URL%/}/api/health"
+          # --max-time 150: if the service DID go idle (e.g. GitHub delayed a
+          # run past the 15-minute window), Render's cold start takes up to a
+          # minute — the request must wait it out, not abort mid-spin-up.
+          # --retry 2 --retry-connrefused: tolerate transient blips between
+          # GitHub and Render.
+          if response=$(curl --fail --silent --show-error --max-time 150 \
+                --retry 2 --retry-connrefused \
+                -o /dev/null -w "%{http_code} %{time_total}s" "$url"); then
+            echo "OK: $url → $response"
+          else
+            # Failure exits 0 on purpose: one missed ping is retried by the
+            # next scheduled run in 12 minutes, and failing loudly here would
+            # paint 120 red runs a day over the CI history. Anything longer
+            # than one missed window is visible as the gap between
+            # "OK:" lines — or on the Render dashboard itself.
+            echo "::warning::Ping to $url failed — service may be suspended (out of free hours?) or the URL changed. Next run retries in 12 min."
+          fi
